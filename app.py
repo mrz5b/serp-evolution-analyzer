@@ -579,7 +579,7 @@ def generate_fallback_summary(url_data, cat_summary, client_name, event_desc, n_
         ))
 
     while len(points) < 4:
-        points.append(("Dropped results were minor.", f"{n_dropped} dropped results were typically single-day appearances."))
+        points.append(("Dropped URLs were minor.", f"{n_dropped} dropped URLs were typically single-day appearances."))
     return points[:4]
 
 
@@ -611,14 +611,14 @@ def generate_slide_copy(url_data, cat_summary, client_name, event_desc, n_pre, n
     data_context = f"""Client: {client_name}
 Event: {event_desc} on {pivot_str}
 Pre period: {n_pre} days, Post period: {n_post} days
-Total unique results: {total} ({n_new} new, {n_persistent} persistent, {n_dropped} dropped)
-New results shown in chart: top {show_count} of {total_new}
-Additional new results not shown: {remaining}
-All dropped results were minor (1-2 day appearances): {all_dropped_minor}"""
+Total unique URLs tracked: {total} ({n_new} new, {n_persistent} persistent, {n_dropped} dropped)
+New URLs shown in chart: top {show_count} of {total_new}
+Additional new URLs not shown: {remaining}
+All dropped URLs were minor (1-2 day appearances): {all_dropped_minor}"""
 
     if biggest:
         data_context += f"""
-Biggest source category gain: {biggest['category']} went from {biggest['pre_slot_days']} to {biggest['post_slot_days']} search positions held"""
+Biggest source category gain: {biggest['category']} went from {biggest['pre_slot_days']} to {biggest['post_slot_days']} search results held"""
 
     import anthropic
     client = anthropic.Anthropic(api_key=api_key)
@@ -633,22 +633,27 @@ Biggest source category gain: {biggest['category']} went from {biggest['pre_slot
 {data_context}
 
 AUDIENCE: A client executive who doesn't know SEO terminology.
-NEVER USE: "SERP", "slot-days", "standard results", "unique URLs", "URL", "search position"
-USE INSTEAD: "Google results", "search results", "days visible", "appeared in Google", "links", "results", "sources"
+NEVER USE: "SERP", "slot-days", "standard results", "unique URLs", "search position"
+USE INSTEAD: "Google results", "search results", "days visible", "appeared in Google", "sources"
+TERMINOLOGY — "URLs" vs "results":
+- Use "URLs" when counting specific tracked pages (e.g., "{total} URLs tracked", "{n_new} new URLs"). A URL is a specific web page.
+- Use "results" or "search results" only when talking about search result positions broadly (e.g., "search results held", "Google results").
+- NEVER call a counted URL a "result". "{total} results tracked" is WRONG. "{total} URLs tracked" is CORRECT.
 TONE: Clear, professional, confident. Not academic. Not hedging.
+TITLES: Every title must be 45 characters or fewer. Count carefully.
 
 Return EXACTLY these 11 lines, one value per line, no labels, no blank lines:
-1. Slide 3 title: A confident statement about how the event changed search results (max 8 words)
-2. Slide 3 subtitle: One sentence explaining that of {total} total results across the full period, most appeared only after the {event_desc} on {pivot_str}. Must include the number {total}.
-3. Slide 3 footnote: {"One sentence noting that the " + str(n_dropped) + " dropped results were only brief appearances, not meaningful losses. Must include the number " + str(n_dropped) + "." if all_dropped_minor else "Write: NONE"}
-4. Slide 4 title: A clear heading for a chart comparing results that appeared in both periods (max 8 words)
-5. Slide 4 subtitle: One short sentence explaining this chart shows how many days (out of {n_post}) each result was visible before vs. after
-6. Slide 5 title: A clear heading for a chart of results that only appeared after the event (max 8 words)
-7. Slide 5 subtitle: One sentence noting {total_new} new results appeared after the event, showing the top {show_count} by days visible (out of {n_post} days)
-8. Slide 5 footnote: {"One sentence noting " + str(remaining) + " additional results appeared only briefly (1-2 days). Must include the number " + str(remaining) + "." if remaining > 0 else "Write: NONE"}
-9. Slide 6 title: A clear heading for a chart comparing source types before vs. after (max 8 words)
+1. Slide 3 title (max 45 chars): A confident statement about how the event changed Google results
+2. Slide 3 subtitle: One sentence explaining that of {total} total URLs tracked across the full period, most appeared only after the {event_desc} on {pivot_str}. Must include the number {total} and the word "URLs".
+3. Slide 3 footnote: {"One sentence noting that the " + str(n_dropped) + " dropped URLs were only brief appearances, not meaningful losses. Must include the number " + str(n_dropped) + " and the word 'URLs'." if all_dropped_minor else "Write: NONE"}
+4. Slide 4 title (max 45 chars): A clear heading for a chart comparing URLs that appeared in both periods
+5. Slide 4 subtitle: One short sentence explaining this chart shows how many days (out of {n_post}) each URL was visible before vs. after. Must include "out of {n_post}".
+6. Slide 5 title (max 45 chars): A clear heading for a chart of URLs that only appeared after the event
+7. Slide 5 subtitle: One sentence noting {total_new} new URLs appeared after the event, showing the top {show_count} by days visible out of {n_post} days. Must include "out of {n_post}" and the word "URLs".
+8. Slide 5 footnote: {"One sentence noting " + str(remaining) + " additional URLs appeared only briefly (1-2 days). Must include the number " + str(remaining) + " and the word 'URLs'." if remaining > 0 else "Write: NONE"}
+9. Slide 6 title (max 45 chars): A clear heading for a chart comparing source types before vs. after
 10. Slide 6 subtitle: One sentence explaining this chart shows how the mix of source types (news, social, video, etc.) shifted across the {n_pre}-day periods before and after the event
-11. Slide 6 footnote: {"One sentence noting " + biggest['category'] + " grew from " + str(biggest['pre_slot_days']) + " to " + str(biggest['post_slot_days']) + " results held across the period, becoming more dominant. Must include both numbers." if biggest else "Write: NONE"}"""
+11. Slide 6 footnote: {"One sentence noting " + biggest['category'] + " grew from " + str(biggest['pre_slot_days']) + " to " + str(biggest['post_slot_days']) + " search results held across the period, becoming more dominant. Must include both numbers." if biggest else "Write: NONE"}"""
         }]
     )
 
@@ -666,19 +671,37 @@ Return EXACTLY these 11 lines, one value per line, no labels, no blank lines:
     def _line_or_none(line):
         return None if line.strip().upper() == 'NONE' else line.strip()
 
-    return {
-        'slide_3_title': lines[0],
+    def _cap_title(text, max_len=45):
+        """Truncate title to max_len, breaking at last word boundary."""
+        text = text.strip()
+        if len(text) <= max_len:
+            return text
+        truncated = text[:max_len].rsplit(' ', 1)[0]
+        return truncated.rstrip('.,;:–—')
+
+    result = {
+        'slide_3_title': _cap_title(lines[0]),
         'slide_3_subtitle': lines[1],
         'slide_3_footnote': _line_or_none(lines[2]),
-        'slide_4_title': lines[3],
+        'slide_4_title': _cap_title(lines[3]),
         'slide_4_subtitle': lines[4],
-        'slide_5_title': lines[5],
+        'slide_5_title': _cap_title(lines[5]),
         'slide_5_subtitle': lines[6],
         'slide_5_footnote': _line_or_none(lines[7]),
-        'slide_6_title': lines[8],
+        'slide_6_title': _cap_title(lines[8]),
         'slide_6_subtitle': lines[9],
         'slide_6_footnote': _line_or_none(lines[10]),
     }
+
+    # Fallback: if any title got truncated to something too short, use fallback for that slide
+    fallback = generate_fallback_slide_copy(
+        url_data, cat_summary, client_name, event_desc, n_pre, n_post, pivot_date
+    )
+    for key in result:
+        if key.endswith('_title') and result[key] and len(result[key]) < 10:
+            result[key] = fallback[key]
+
+    return result
 
 
 def generate_fallback_slide_copy(url_data, cat_summary, client_name, event_desc, n_pre, n_post, pivot_date):
@@ -702,33 +725,38 @@ def generate_fallback_slide_copy(url_data, cat_summary, client_name, event_desc,
     slide_3_footnote = None
     if all_dropped_minor:
         slide_3_footnote = (
-            f"The {n_dropped} dropped result{'s' if n_dropped != 1 else ''} "
+            f"The {n_dropped} dropped URL{'s' if n_dropped != 1 else ''} "
             f"{'were' if n_dropped != 1 else 'was'} only brief appearances — not meaningful losses."
         )
 
     slide_5_footnote = None
     if remaining > 0:
-        slide_5_footnote = f"+ {remaining} additional results appeared only briefly (1–2 days)."
+        slide_5_footnote = f"+ {remaining} additional URLs appeared only briefly (1–2 days)."
 
     slide_6_footnote = None
     if biggest:
         slide_6_footnote = (
             f"{biggest['category']} grew from {biggest['pre_slot_days']} to "
-            f"{biggest['post_slot_days']} results held across the period, becoming the dominant source type."
+            f"{biggest['post_slot_days']} search results held across the period, becoming the dominant source type."
         )
 
+    # Build slide 3 title and ensure it's ≤45 chars
+    slide_3_title = f"The {event_desc.lower()} reshaped Google"
+    if len(slide_3_title) > 45:
+        slide_3_title = "The event reshaped Google results"
+
     return {
-        'slide_3_title': f"The {event_desc.lower()} reshaped Google results",
+        'slide_3_title': slide_3_title,
         'slide_3_subtitle': (
-            f"Of {total} total results tracked across the full period, the majority "
+            f"Of {total} URLs tracked across the full period, the majority "
             f"appeared in Google only after the {event_desc.lower()} on {pivot_str}."
         ),
         'slide_3_footnote': slide_3_footnote,
-        'slide_4_title': "Results that appeared before and after",
-        'slide_4_subtitle': f"Number of days each result was visible in each period (out of {n_post})",
-        'slide_5_title': "New results after the event",
+        'slide_4_title': "URLs that appeared before and after",
+        'slide_4_subtitle': f"Days each URL was visible in each period (out of {n_post})",
+        'slide_5_title': "New URLs after the event",
         'slide_5_subtitle': (
-            f"{total_new} new results appeared only after the event — "
+            f"{total_new} new URLs appeared only after the event — "
             f"showing the top {show_count} by days visible (out of {n_post})."
         ),
         'slide_5_footnote': slide_5_footnote,
@@ -1012,7 +1040,7 @@ def build_slide_3(prs, url_data, n_pre, n_post, client_name, event_desc, pivot_d
 
     pivot_str = _format_date(pivot_date, '%B %-d') if hasattr(pivot_date, 'strftime') else str(pivot_date)
     subtitle_fallback = (
-        f"Of {total} total results tracked across the full period, the majority "
+        f"Of {total} URLs tracked across the full period, the majority "
         f"appeared in Google only after the {event_desc.lower()} on {pivot_str}."
     )
     subtitle = (slide_copy or {}).get('slide_3_subtitle', subtitle_fallback)
@@ -1053,7 +1081,7 @@ def build_slide_3(prs, url_data, n_pre, n_post, client_name, event_desc, pivot_d
     footnote = (slide_copy or {}).get('slide_3_footnote')
     if footnote is None and n_dropped > 0 and all(url_data[u]['pre_days'] <= 2 for u in url_data if url_data[u]['status'] == 'Dropped'):
         footnote = (
-            f"The {n_dropped} dropped result{'s' if n_dropped != 1 else ''} "
+            f"The {n_dropped} dropped URL{'s' if n_dropped != 1 else ''} "
             f"{'were' if n_dropped != 1 else 'was'} only brief appearances — not meaningful losses."
         )
     if footnote:
@@ -1070,11 +1098,11 @@ def build_slide_4_v2(prs, url_data, n_pre, n_post, logo_path, slide_copy=None):
     persistent = [d for d in url_data.values() if d['status'] == 'Persistent']
     persistent.sort(key=lambda d: -(d['pre_days'] + d['post_days']))
 
-    title = (slide_copy or {}).get('slide_4_title', "Results that appeared before and after")
+    title = (slide_copy or {}).get('slide_4_title', "URLs that appeared before and after")
     _add_textbox(slide, Inches(0.8), Inches(0.25), Inches(8), Inches(0.6),
                  title, 'Calibri Light', 26, DARK)
     subtitle = (slide_copy or {}).get('slide_4_subtitle',
-                 f"Number of days each result was visible in each period (out of {n_post})")
+                 f"Days each URL was visible in each period (out of {n_post})")
     _add_textbox(slide, Inches(0.8), Inches(0.8), Inches(8), Inches(0.35),
                  subtitle, 'Calibri', 12, GRAY)
 
@@ -1154,11 +1182,11 @@ def build_slide_5(prs, url_data, n_post, logo_path, slide_copy=None):
     show = new_urls[:10]
     remaining = total_new - len(show)
 
-    title = (slide_copy or {}).get('slide_5_title', "New results after the event")
+    title = (slide_copy or {}).get('slide_5_title', "New URLs after the event")
     _add_textbox(slide, Inches(0.8), Inches(0.25), Inches(8), Inches(0.6),
                  title, 'Calibri Light', 26, DARK)
     subtitle = (slide_copy or {}).get('slide_5_subtitle',
-                 f"{total_new} new results appeared only after the event — showing the top {min(10, total_new)} by days visible (out of {n_post}).")
+                 f"{total_new} new URLs appeared only after the event — showing the top {min(10, total_new)} by days visible (out of {n_post}).")
     _add_textbox(slide, Inches(0.8), Inches(0.8), Inches(8), Inches(0.35),
                  subtitle, 'Calibri', 12, GRAY)
 
@@ -1207,7 +1235,7 @@ def build_slide_5(prs, url_data, n_post, logo_path, slide_copy=None):
     # Footnote
     footnote = (slide_copy or {}).get('slide_5_footnote')
     if footnote is None and remaining > 0:
-        footnote = f"+ {remaining} additional results appeared only briefly (1–2 days)."
+        footnote = f"+ {remaining} additional URLs appeared only briefly (1–2 days)."
     if footnote:
         foot_y = chart_top + row_h * len(show) + Inches(0.15)
         _add_textbox(slide, Inches(0.8), foot_y, Inches(8), Inches(0.3),
