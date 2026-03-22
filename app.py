@@ -1095,7 +1095,7 @@ def check_auth():
 
         st.markdown(
             f'<div style="display: flex; justify-content: center;">'
-            f'<a href="{authorization_url}" target="_self" style="background-color: #4285f4; '
+            f'<a href="{authorization_url}" target="_top" rel="noreferrer" style="background-color: #4285f4; '
             f'color: #fff; text-decoration: none; text-align: center; font-size: 16px; '
             f'margin: 4px 2px; cursor: pointer; padding: 8px 12px; border-radius: 4px; '
             f'display: flex; align-items: center;">'
