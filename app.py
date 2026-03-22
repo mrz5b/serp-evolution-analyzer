@@ -562,25 +562,183 @@ def generate_fallback_summary(url_data, cat_summary, client_name, event_desc, n_
     biggest_loss = min(cat_summary, key=lambda c: c['change']) if cat_summary else None
 
     points = [
-        (f"{n_new} new URLs entered the SERP after the event.",
-         f"Top new entrants: {top_new_str}. These appeared only in the post-announcement period."),
-        (f"{n_persistent} URLs persisted across both periods.",
-         f"Out of {total} total unique URLs, {n_persistent} appeared in both the pre and post periods."),
+        (f"{n_new} new results entered Google after the event.",
+         f"Top new entrants: {top_new_str}. These appeared only in the post-event period."),
+        (f"{n_persistent} results persisted across both periods.",
+         f"Out of {total} total results, {n_persistent} appeared in both the pre and post periods."),
     ]
     if biggest_gain:
         points.append((
             f"{biggest_gain['category']} saw the largest gain.",
-            f"Slot-days went from {biggest_gain['pre_slot_days']} to {biggest_gain['post_slot_days']} ({biggest_gain['change']:+d} change)."
+            f"Search results held went from {biggest_gain['pre_slot_days']} to {biggest_gain['post_slot_days']} ({biggest_gain['change']:+d} change)."
         ))
     if biggest_loss and biggest_loss['change'] < 0:
         points.append((
             f"{biggest_loss['category']} was most displaced.",
-            f"Slot-days dropped from {biggest_loss['pre_slot_days']} to {biggest_loss['post_slot_days']} ({biggest_loss['change']:+d} change)."
+            f"Search results held dropped from {biggest_loss['pre_slot_days']} to {biggest_loss['post_slot_days']} ({biggest_loss['change']:+d} change)."
         ))
 
     while len(points) < 4:
-        points.append(("Dropped URLs were minor.", f"{n_dropped} dropped URLs were typically single-day appearances."))
+        points.append(("Dropped results were minor.", f"{n_dropped} dropped results were typically single-day appearances."))
     return points[:4]
+
+
+# ─────────────────────────────────────────────
+# STEP 4b: SLIDE COPY (Claude API)
+# ─────────────────────────────────────────────
+
+def generate_slide_copy(url_data, cat_summary, client_name, event_desc, n_pre, n_post, pivot_date, api_key):
+    """Generate plain-language slide titles, subtitles, and footnotes using Claude API."""
+    n_new = sum(1 for d in url_data.values() if d['status'] == 'New')
+    n_persistent = sum(1 for d in url_data.values() if d['status'] == 'Persistent')
+    n_dropped = sum(1 for d in url_data.values() if d['status'] == 'Dropped')
+    total = n_new + n_persistent + n_dropped
+
+    new_urls = [d for d in url_data.values() if d['status'] == 'New']
+    new_urls.sort(key=lambda d: -d['post_days'])
+    total_new = len(new_urls)
+    show_count = min(10, total_new)
+    remaining = total_new - show_count
+
+    all_dropped_minor = n_dropped > 0 and all(
+        url_data[u]['pre_days'] <= 2 for u in url_data if url_data[u]['status'] == 'Dropped'
+    )
+
+    biggest = max(cat_summary, key=lambda c: c['change']) if cat_summary else None
+
+    pivot_str = _format_date(pivot_date, '%B %-d') if hasattr(pivot_date, 'strftime') else str(pivot_date)
+
+    data_context = f"""Client: {client_name}
+Event: {event_desc} on {pivot_str}
+Pre period: {n_pre} days, Post period: {n_post} days
+Total unique results: {total} ({n_new} new, {n_persistent} persistent, {n_dropped} dropped)
+New results shown in chart: top {show_count} of {total_new}
+Additional new results not shown: {remaining}
+All dropped results were minor (1-2 day appearances): {all_dropped_minor}"""
+
+    if biggest:
+        data_context += f"""
+Biggest source category gain: {biggest['category']} went from {biggest['pre_slot_days']} to {biggest['post_slot_days']} search positions held"""
+
+    import anthropic
+    client = anthropic.Anthropic(api_key=api_key)
+    msg = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=1000,
+        temperature=0.2,
+        messages=[{
+            "role": "user",
+            "content": f"""Write short slide titles, subtitles, and footnotes for a presentation about how Google search results changed after a specific event.
+
+{data_context}
+
+AUDIENCE: A client executive who doesn't know SEO terminology.
+NEVER USE: "SERP", "slot-days", "standard results", "unique URLs", "URL", "search position"
+USE INSTEAD: "Google results", "search results", "days visible", "appeared in Google", "links", "results", "sources"
+TONE: Clear, professional, confident. Not academic. Not hedging.
+
+Return EXACTLY these 11 lines, one value per line, no labels, no blank lines:
+1. Slide 3 title: A confident statement about how the event changed search results (max 8 words)
+2. Slide 3 subtitle: One sentence explaining that of {total} total results across the full period, most appeared only after the {event_desc} on {pivot_str}. Must include the number {total}.
+3. Slide 3 footnote: {"One sentence noting that the " + str(n_dropped) + " dropped results were only brief appearances, not meaningful losses. Must include the number " + str(n_dropped) + "." if all_dropped_minor else "Write: NONE"}
+4. Slide 4 title: A clear heading for a chart comparing results that appeared in both periods (max 8 words)
+5. Slide 4 subtitle: One short sentence explaining this chart shows how many days (out of {n_post}) each result was visible before vs. after
+6. Slide 5 title: A clear heading for a chart of results that only appeared after the event (max 8 words)
+7. Slide 5 subtitle: One sentence noting {total_new} new results appeared after the event, showing the top {show_count} by days visible (out of {n_post} days)
+8. Slide 5 footnote: {"One sentence noting " + str(remaining) + " additional results appeared only briefly (1-2 days). Must include the number " + str(remaining) + "." if remaining > 0 else "Write: NONE"}
+9. Slide 6 title: A clear heading for a chart comparing source types before vs. after (max 8 words)
+10. Slide 6 subtitle: One sentence explaining this chart shows how the mix of source types (news, social, video, etc.) shifted across the {n_pre}-day periods before and after the event
+11. Slide 6 footnote: {"One sentence noting " + biggest['category'] + " grew from " + str(biggest['pre_slot_days']) + " to " + str(biggest['post_slot_days']) + " results held across the period, becoming more dominant. Must include both numbers." if biggest else "Write: NONE"}"""
+        }]
+    )
+
+    lines = [l.strip() for l in msg.content[0].text.strip().split('\n') if l.strip()]
+
+    # Strip any accidental numbering prefixes like "1. " or "1) "
+    import re as _re
+    lines = [_re.sub(r'^\d+[\.\)]\s*', '', l) for l in lines]
+
+    if len(lines) < 11:
+        return generate_fallback_slide_copy(
+            url_data, cat_summary, client_name, event_desc, n_pre, n_post, pivot_date
+        )
+
+    def _line_or_none(line):
+        return None if line.strip().upper() == 'NONE' else line.strip()
+
+    return {
+        'slide_3_title': lines[0],
+        'slide_3_subtitle': lines[1],
+        'slide_3_footnote': _line_or_none(lines[2]),
+        'slide_4_title': lines[3],
+        'slide_4_subtitle': lines[4],
+        'slide_5_title': lines[5],
+        'slide_5_subtitle': lines[6],
+        'slide_5_footnote': _line_or_none(lines[7]),
+        'slide_6_title': lines[8],
+        'slide_6_subtitle': lines[9],
+        'slide_6_footnote': _line_or_none(lines[10]),
+    }
+
+
+def generate_fallback_slide_copy(url_data, cat_summary, client_name, event_desc, n_pre, n_post, pivot_date):
+    """Plain-English slide copy without Claude API."""
+    n_new = sum(1 for d in url_data.values() if d['status'] == 'New')
+    n_persistent = sum(1 for d in url_data.values() if d['status'] == 'Persistent')
+    n_dropped = sum(1 for d in url_data.values() if d['status'] == 'Dropped')
+    total = n_new + n_persistent + n_dropped
+    total_new = sum(1 for d in url_data.values() if d['status'] == 'New')
+    show_count = min(10, total_new)
+    remaining = total_new - show_count
+
+    pivot_str = _format_date(pivot_date, '%B %-d') if hasattr(pivot_date, 'strftime') else str(pivot_date)
+
+    all_dropped_minor = n_dropped > 0 and all(
+        url_data[u]['pre_days'] <= 2 for u in url_data if url_data[u]['status'] == 'Dropped'
+    )
+
+    biggest = max(cat_summary, key=lambda c: c['change']) if cat_summary else None
+
+    slide_3_footnote = None
+    if all_dropped_minor:
+        slide_3_footnote = (
+            f"The {n_dropped} dropped result{'s' if n_dropped != 1 else ''} "
+            f"{'were' if n_dropped != 1 else 'was'} only brief appearances — not meaningful losses."
+        )
+
+    slide_5_footnote = None
+    if remaining > 0:
+        slide_5_footnote = f"+ {remaining} additional results appeared only briefly (1–2 days)."
+
+    slide_6_footnote = None
+    if biggest:
+        slide_6_footnote = (
+            f"{biggest['category']} grew from {biggest['pre_slot_days']} to "
+            f"{biggest['post_slot_days']} results held across the period, becoming the dominant source type."
+        )
+
+    return {
+        'slide_3_title': f"The {event_desc.lower()} reshaped Google results",
+        'slide_3_subtitle': (
+            f"Of {total} total results tracked across the full period, the majority "
+            f"appeared in Google only after the {event_desc.lower()} on {pivot_str}."
+        ),
+        'slide_3_footnote': slide_3_footnote,
+        'slide_4_title': "Results that appeared before and after",
+        'slide_4_subtitle': f"Number of days each result was visible in each period (out of {n_post})",
+        'slide_5_title': "New results after the event",
+        'slide_5_subtitle': (
+            f"{total_new} new results appeared only after the event — "
+            f"showing the top {show_count} by days visible (out of {n_post})."
+        ),
+        'slide_5_footnote': slide_5_footnote,
+        'slide_6_title': "How the source mix shifted",
+        'slide_6_subtitle': (
+            f"Search results held by each source type across the "
+            f"{n_pre}-day periods before and after the event."
+        ),
+        'slide_6_footnote': slide_6_footnote,
+    }
 
 
 # ─────────────────────────────────────────────
@@ -665,7 +823,7 @@ def generate_source_type_excel(cat_summary, domain_detail, n_pre, n_post):
     header_font = Font(name='Arial', bold=True, color='FFFFFF', size=11)
     header_fill = PatternFill('solid', fgColor=NAVY_HEX)
 
-    headers = ['Category', f'Pre Slot-Days ({n_pre}d)', f'Post Slot-Days ({n_post}d)', 'Change']
+    headers = ['Category', f'Pre: Results Held ({n_pre}d)', f'Post: Results Held ({n_post}d)', 'Change']
     for col, h in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col, value=h)
         cell.font = header_font
@@ -689,7 +847,7 @@ def generate_source_type_excel(cat_summary, domain_detail, n_pre, n_post):
 
     # Domain Detail sheet
     ws2 = wb.create_sheet("Domain Detail")
-    headers2 = ['Category', 'Domain', f'Pre Slot-Days ({n_pre}d)', f'Post Slot-Days ({n_post}d)', 'Total']
+    headers2 = ['Category', 'Domain', f'Pre: Results Held ({n_pre}d)', f'Post: Results Held ({n_post}d)', 'Total']
     for col, h in enumerate(headers2, 1):
         cell = ws2.cell(row=1, column=col, value=h)
         cell.font = header_font
@@ -836,7 +994,7 @@ def build_slide_2(prs, summary_points, logo_path):
     _add_logo(slide, logo_path)
 
 
-def build_slide_3(prs, url_data, n_pre, n_post, client_name, event_desc, pivot_date, logo_path):
+def build_slide_3(prs, url_data, n_pre, n_post, client_name, event_desc, pivot_date, logo_path, slide_copy=None):
     """Stats cards — light gray background."""
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     bg = slide.background
@@ -848,18 +1006,23 @@ def build_slide_3(prs, url_data, n_pre, n_post, client_name, event_desc, pivot_d
     n_dropped = sum(1 for d in url_data.values() if d['status'] == 'Dropped')
     total = n_new + n_persistent + n_dropped
 
+    title = (slide_copy or {}).get('slide_3_title', "The announcement reshaped search")
     _add_textbox(slide, Inches(0.8), Inches(0.35), Inches(8.5), Inches(0.7),
-                 "The announcement reshaped search", 'Calibri Light', 26, DARK)
+                 title, 'Calibri Light', 26, DARK)
 
     pivot_str = _format_date(pivot_date, '%B %-d') if hasattr(pivot_date, 'strftime') else str(pivot_date)
+    subtitle_fallback = (
+        f"Of {total} total results tracked across the full period, the majority "
+        f"appeared in Google only after the {event_desc.lower()} on {pivot_str}."
+    )
+    subtitle = (slide_copy or {}).get('slide_3_subtitle', subtitle_fallback)
     _add_textbox(slide, Inches(0.8), Inches(1.0), Inches(8.5), Inches(0.6),
-                 f"Of {total} unique URLs appearing as standard results across the full period, the majority entered the SERP only after the {event_desc} on {pivot_str}.",
-                 'Calibri', 12, GRAY)
+                 subtitle, 'Calibri', 12, GRAY)
 
     cards = [
-        (n_new, "New URLs", "Appeared only after the\nannouncement", TEAL),
-        (n_persistent, "Persistent URLs", "Present in both pre and post\nperiods", NAVY),
-        (n_dropped, "Dropped URLs", "Disappeared after the\nannouncement", GRAY),
+        (n_new, "New", "Appeared only after the\nevent", TEAL),
+        (n_persistent, "Persistent", "Present in both periods", NAVY),
+        (n_dropped, "Dropped", "Disappeared after the\nevent", GRAY),
     ]
 
     card_w = Inches(2.5)
@@ -887,25 +1050,33 @@ def build_slide_3(prs, url_data, n_pre, n_post, client_name, event_desc, pivot_d
                      desc, 'Calibri', 11, GRAY, alignment=PP_ALIGN.CENTER)
 
     # Footnote about dropped
-    if n_dropped > 0 and all(url_data[u]['pre_days'] <= 2 for u in url_data if url_data[u]['status'] == 'Dropped'):
+    footnote = (slide_copy or {}).get('slide_3_footnote')
+    if footnote is None and n_dropped > 0 and all(url_data[u]['pre_days'] <= 2 for u in url_data if url_data[u]['status'] == 'Dropped'):
+        footnote = (
+            f"The {n_dropped} dropped result{'s' if n_dropped != 1 else ''} "
+            f"{'were' if n_dropped != 1 else 'was'} only brief appearances — not meaningful losses."
+        )
+    if footnote:
         _add_textbox(slide, Inches(0.8), Inches(4.1), Inches(8), Inches(0.3),
-                     f"{n_dropped} dropped URL{'s' if n_dropped != 1 else ''} {'were' if n_dropped != 1 else 'was'} all single-day appearances — not significant losses.",
-                     'Calibri', 11, GRAY, italic=True)
+                     footnote, 'Calibri', 11, GRAY, italic=True)
 
     _add_logo(slide, logo_path)
 
 
-def build_slide_4_v2(prs, url_data, n_pre, n_post, logo_path):
+def build_slide_4_v2(prs, url_data, n_pre, n_post, logo_path, slide_copy=None):
     """Persistent URLs — butterfly chart (revised layout matching reference)."""
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
     persistent = [d for d in url_data.values() if d['status'] == 'Persistent']
     persistent.sort(key=lambda d: -(d['pre_days'] + d['post_days']))
 
+    title = (slide_copy or {}).get('slide_4_title', "Results that appeared before and after")
     _add_textbox(slide, Inches(0.8), Inches(0.25), Inches(8), Inches(0.6),
-                 "Persistent URLs: pre vs. post", 'Calibri Light', 26, DARK)
+                 title, 'Calibri Light', 26, DARK)
+    subtitle = (slide_copy or {}).get('slide_4_subtitle',
+                 f"Number of days each result was visible in each period (out of {n_post})")
     _add_textbox(slide, Inches(0.8), Inches(0.8), Inches(8), Inches(0.35),
-                 f"Days present out of {n_post} in each period", 'Calibri', 12, GRAY)
+                 subtitle, 'Calibri', 12, GRAY)
 
     # Legend
     _add_rect(slide, Inches(0.8), Inches(1.18), Inches(0.2), Inches(0.14), NAVY)
@@ -973,7 +1144,7 @@ def build_slide_4_v2(prs, url_data, n_pre, n_post, logo_path):
     _add_logo(slide, logo_path)
 
 
-def build_slide_5(prs, url_data, n_post, logo_path):
+def build_slide_5(prs, url_data, n_post, logo_path, slide_copy=None):
     """New URLs — horizontal bar chart."""
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
@@ -983,11 +1154,13 @@ def build_slide_5(prs, url_data, n_post, logo_path):
     show = new_urls[:10]
     remaining = total_new - len(show)
 
+    title = (slide_copy or {}).get('slide_5_title', "New results after the event")
     _add_textbox(slide, Inches(0.8), Inches(0.25), Inches(8), Inches(0.6),
-                 "New URLs: post-announcement", 'Calibri Light', 26, DARK)
+                 title, 'Calibri Light', 26, DARK)
+    subtitle = (slide_copy or {}).get('slide_5_subtitle',
+                 f"{total_new} new results appeared only after the event — showing the top {min(10, total_new)} by days visible (out of {n_post}).")
     _add_textbox(slide, Inches(0.8), Inches(0.8), Inches(8), Inches(0.35),
-                 f"{total_new} URLs appeared only after the event. Top {min(10, total_new)} by days present (of {n_post}).",
-                 'Calibri', 12, GRAY)
+                 subtitle, 'Calibri', 12, GRAY)
 
     if not show:
         _add_textbox(slide, Inches(2), Inches(2.5), Inches(6), Inches(0.5),
@@ -1032,24 +1205,28 @@ def build_slide_5(prs, url_data, n_post, logo_path):
                      str(d['post_days']), 'Calibri', 9, GRAY)
 
     # Footnote
-    if remaining > 0:
+    footnote = (slide_copy or {}).get('slide_5_footnote')
+    if footnote is None and remaining > 0:
+        footnote = f"+ {remaining} additional results appeared only briefly (1–2 days)."
+    if footnote:
         foot_y = chart_top + row_h * len(show) + Inches(0.15)
         _add_textbox(slide, Inches(0.8), foot_y, Inches(8), Inches(0.3),
-                     f"+ {remaining} additional URLs appeared 1–2 times (transient news cycle coverage).",
-                     'Calibri', 11, GRAY, italic=True)
+                     footnote, 'Calibri', 11, GRAY, italic=True)
 
     _add_logo(slide, logo_path)
 
 
-def build_slide_6(prs, cat_summary, n_pre, n_post, logo_path):
+def build_slide_6(prs, cat_summary, n_pre, n_post, logo_path, slide_copy=None):
     """Source type shift — grouped horizontal bar chart."""
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
+    title = (slide_copy or {}).get('slide_6_title', "How the source mix shifted")
     _add_textbox(slide, Inches(0.8), Inches(0.25), Inches(8), Inches(0.6),
-                 "Source type shift", 'Calibri Light', 26, DARK)
+                 title, 'Calibri Light', 26, DARK)
+    subtitle = (slide_copy or {}).get('slide_6_subtitle',
+                 f"Search results held by each source type across the {n_pre}-day periods before and after the event.")
     _add_textbox(slide, Inches(0.8), Inches(0.8), Inches(8), Inches(0.35),
-                 f"Slot-days by source category across {n_pre}-day pre- and post-announcement periods.",
-                 'Calibri', 12, GRAY)
+                 subtitle, 'Calibri', 12, GRAY)
 
     # Legend
     _add_rect(slide, Inches(0.8), Inches(1.18), Inches(0.2), Inches(0.14), NAVY)
@@ -1101,17 +1278,22 @@ def build_slide_6(prs, cat_summary, n_pre, n_post, logo_path):
 
     # Footnote
     biggest = max(sorted_cats, key=lambda c: c['change'])
+    footnote = (slide_copy or {}).get('slide_6_footnote')
+    if footnote is None:
+        footnote = (
+            f"{biggest['category']} grew from {biggest['pre_slot_days']} to "
+            f"{biggest['post_slot_days']} results held across the period, becoming the dominant source type."
+        )
     foot_y = chart_top + group_h * n_cats + Inches(0.15)
     _add_textbox(slide, Inches(0.8), foot_y, Inches(8), Inches(0.3),
-                 f"{biggest['category']} coverage claimed {biggest['post_slot_days']} slot-days post-announcement (vs. {biggest['pre_slot_days']} pre), displacing other source types.",
-                 'Calibri', 11, GRAY, italic=True)
+                 footnote, 'Calibri', 11, GRAY, italic=True)
 
     _add_logo(slide, logo_path)
 
 
 def generate_pptx(client_name, event_desc, pivot_date, date_range_str,
                   url_data, cat_summary, n_pre, n_post, summary_points,
-                  logo_path, logo_white_path):
+                  logo_path, logo_white_path, slide_copy=None):
     """Build the full 6-slide PPTX deck."""
     prs = Presentation()
     prs.slide_width = Inches(10)
@@ -1119,10 +1301,10 @@ def generate_pptx(client_name, event_desc, pivot_date, date_range_str,
 
     build_slide_1(prs, client_name, event_desc, date_range_str, logo_white_path)
     build_slide_2(prs, summary_points, logo_path)
-    build_slide_3(prs, url_data, n_pre, n_post, client_name, event_desc, pivot_date, logo_path)
-    build_slide_4_v2(prs, url_data, n_pre, n_post, logo_path)
-    build_slide_5(prs, url_data, n_post, logo_path)
-    build_slide_6(prs, cat_summary, n_pre, n_post, logo_path)
+    build_slide_3(prs, url_data, n_pre, n_post, client_name, event_desc, pivot_date, logo_path, slide_copy)
+    build_slide_4_v2(prs, url_data, n_pre, n_post, logo_path, slide_copy)
+    build_slide_5(prs, url_data, n_post, logo_path, slide_copy)
+    build_slide_6(prs, cat_summary, n_pre, n_post, logo_path, slide_copy)
 
     buf = io.BytesIO()
     prs.save(buf)
@@ -1458,11 +1640,27 @@ def main():
 
         logo_path, logo_white_path = _get_logo_paths()
 
+        with st.spinner("Generating slide copy..."):
+            if api_key:
+                try:
+                    slide_copy = generate_slide_copy(
+                        url_data, cat_summary, client_name, event_desc, n_pre, n_post, pivot_date, api_key
+                    )
+                except Exception as e:
+                    st.warning(f"Claude API slide copy failed ({e}). Using fallback.")
+                    slide_copy = generate_fallback_slide_copy(
+                        url_data, cat_summary, client_name, event_desc, n_pre, n_post, pivot_date
+                    )
+            else:
+                slide_copy = generate_fallback_slide_copy(
+                    url_data, cat_summary, client_name, event_desc, n_pre, n_post, pivot_date
+                )
+
         with st.spinner("Building PowerPoint deck..."):
             pptx_bytes = generate_pptx(
                 client_name, event_desc, pivot_date, date_range_str,
                 url_data, cat_summary, n_pre, n_post, summary_points,
-                logo_path, logo_white_path
+                logo_path, logo_white_path, slide_copy
             )
 
         with st.spinner("Building Excel files..."):
