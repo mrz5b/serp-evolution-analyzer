@@ -389,16 +389,21 @@ Dropped URLs: {', '.join(dropped) if dropped else 'None significant'}
 Slot-day shifts by source category:
 {cat_shifts}
 
-Format each point as:
-HEADLINE: [bold one-sentence headline]
-DETAIL: [1-2 sentences with specific numbers]
+Format each point as exactly two lines — no other text, no numbering, no markdown, no prefixes:
+[Short punchy headline, max 10 words]
+[One sentence of supporting detail with key numbers]
 
-Be concise, data-driven, and insightful. Focus on what matters for reputation management. Do not recommend Knowledge Panel claiming/verification."""
+Keep headlines SHORT — e.g. "News coverage surged 168% post-announcement". Not full sentences.
+Keep detail to ONE sentence with 1-2 key data points.
+Do NOT include the words "HEADLINE" or "DETAIL" anywhere.
+Do NOT use markdown bold (**), bullets, or numbering.
+Focus on what matters for reputation management. Do not recommend Knowledge Panel claiming/verification."""
         }]
     )
 
     text = msg.content[0].text
     points = _parse_summary_points(text)
+    points = _clean_summary_points(points)
 
     # If Claude's response couldn't be parsed, fall back to data-driven templates
     if len(points) < 2:
@@ -414,6 +419,21 @@ Be concise, data-driven, and insightful. Focus on what matters for reputation ma
                 points.append(fb)
 
     return points[:4]
+
+
+def _clean_summary_points(points):
+    """Strip HEADLINE:/DETAIL: prefixes, markdown bold, and excess whitespace from parsed points."""
+    cleaned = []
+    for headline, detail in points:
+        # Strip prefixes (case-insensitive)
+        headline = re.sub(r'^(?:HEADLINE|DETAIL)\s*:\s*', '', headline, flags=re.IGNORECASE)
+        detail = re.sub(r'^(?:HEADLINE|DETAIL)\s*:\s*', '', detail, flags=re.IGNORECASE)
+        # Strip markdown bold
+        headline = re.sub(r'\*\*(.+?)\*\*', r'\1', headline).strip('*').strip()
+        detail = re.sub(r'\*\*(.+?)\*\*', r'\1', detail).strip('*').strip()
+        if headline:
+            cleaned.append((headline, detail))
+    return cleaned
 
 
 def _parse_summary_points(text):
@@ -501,6 +521,16 @@ def _parse_summary_points(text):
                 points.append((headline, detail))
         else:
             i += 1
+
+    if len(points) >= 2:
+        return points
+
+    # Strategy 4: Plain alternating lines — pairs of (headline, detail) separated by blank lines
+    points = []
+    non_empty = [l.strip() for l in text.strip().split('\n') if l.strip()]
+    non_empty = [re.sub(r'\*\*(.+?)\*\*', r'\1', l).strip('*').strip() for l in non_empty]
+    for j in range(0, len(non_empty) - 1, 2):
+        points.append((non_empty[j], non_empty[j + 1]))
 
     return points
 
