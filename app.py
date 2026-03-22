@@ -832,9 +832,13 @@ def build_slide_4_v2(prs, url_data, n_pre, n_post, logo_path):
         _add_textbox(slide, pre_left - Inches(0.35), y, Inches(0.32), row_h,
                      str(d['pre_days']), 'Calibri', 8, GRAY, alignment=PP_ALIGN.RIGHT)
 
-        # Center label
+        # Center label (hyperlinked to URL)
         txb = _add_textbox(slide, label_center - label_w / 2, y, label_w, row_h,
                            label, 'Calibri', 8, GRAY, alignment=PP_ALIGN.CENTER)
+        try:
+            _add_hyperlink(txb.text_frame.paragraphs[0].runs[0], d['url'])
+        except Exception:
+            pass
 
         # Post bar
         post_w = max(Emu(1), int(max_post_bar_w * d['post_days'] / max_days))
@@ -889,9 +893,13 @@ def build_slide_5(prs, url_data, n_post, logo_path):
         bar_y = y + (row_h - bar_h) / 2
         label = make_url_label(d['url'], domain_urls.get(d['domain']))
 
-        # Label (right-aligned)
-        _add_textbox(slide, Inches(0.3), y, label_right - Inches(0.4), row_h,
+        # Label (right-aligned, hyperlinked to URL)
+        txb = _add_textbox(slide, Inches(0.3), y, label_right - Inches(0.4), row_h,
                      label, 'Calibri', 10, GRAY, alignment=PP_ALIGN.RIGHT)
+        try:
+            _add_hyperlink(txb.text_frame.paragraphs[0].runs[0], d['url'])
+        except Exception:
+            pass
 
         # Bar
         bar_w = max(Emu(1), int(max_bar_w * d['post_days'] / max_days))
