@@ -1079,20 +1079,19 @@ def check_auth():
     auth.check_authentification()
 
     if not st.session_state.get('connected', False):
-        # Build custom login URL with hd parameter to force fiveblocks.com domain
-        import google_auth_oauthlib.flow
-        flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
-            creds_path,
-            scopes=["openid",
-                    "https://www.googleapis.com/auth/userinfo.profile",
-                    "https://www.googleapis.com/auth/userinfo.email"],
-            redirect_uri=redirect_uri,
-        )
-        authorization_url, _ = flow.authorization_url(
-            access_type="offline",
-            include_granted_scopes="true",
-            hd=ALLOWED_DOMAIN,
-        )
+        # Build login URL manually — the google_auth_oauthlib library adds PKCE
+        # (code_challenge) which causes 403 errors with Google Workspace Internal apps
+        from urllib.parse import urlencode
+        params = {
+            'response_type': 'code',
+            'client_id': st.secrets["GOOGLE_CLIENT_ID"],
+            'redirect_uri': redirect_uri,
+            'scope': 'openid https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
+            'access_type': 'offline',
+            'include_granted_scopes': 'true',
+            'hd': ALLOWED_DOMAIN,
+        }
+        authorization_url = f"https://accounts.google.com/o/oauth2/auth?{urlencode(params)}"
 
         st.markdown(
             f'<div style="display: flex; justify-content: center;">'
