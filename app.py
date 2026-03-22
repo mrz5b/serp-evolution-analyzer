@@ -1015,13 +1015,14 @@ def _write_google_credentials():
     except (KeyError, FileNotFoundError):
         return None
 
+    redirect_uri = _get_redirect_uri()
     creds = {
         "web": {
             "client_id": client_id,
             "client_secret": client_secret,
             "auth_uri": "https://accounts.google.com/o/oauth2/auth",
             "token_uri": "https://oauth2.googleapis.com/token",
-            "redirect_uris": ["http://localhost:8501"],
+            "redirect_uris": [redirect_uri],
         }
     }
     tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
@@ -1066,18 +1067,46 @@ def check_auth():
     if not creds_path:
         return True
 
+    redirect_uri = _get_redirect_uri()
+
     auth = Authenticate(
         secret_credentials_path=creds_path,
-        redirect_uri=_get_redirect_uri(),
+        redirect_uri=redirect_uri,
         cookie_name="serp_evolution_auth",
         cookie_key=_get_cookie_key(),
     )
 
     auth.check_authentification()
-    auth.login(color='blue', justify_content='center')
 
     if not st.session_state.get('connected', False):
-        # Not logged in yet — show branded login page
+        # Build custom login URL with hd parameter to force fiveblocks.com domain
+        import google_auth_oauthlib.flow
+        flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
+            creds_path,
+            scopes=["openid",
+                    "https://www.googleapis.com/auth/userinfo.profile",
+                    "https://www.googleapis.com/auth/userinfo.email"],
+            redirect_uri=redirect_uri,
+        )
+        authorization_url, _ = flow.authorization_url(
+            access_type="offline",
+            include_granted_scopes="true",
+            hd=ALLOWED_DOMAIN,
+        )
+
+        st.markdown(
+            f'<div style="display: flex; justify-content: center;">'
+            f'<a href="{authorization_url}" target="_self" style="background-color: #4285f4; '
+            f'color: #fff; text-decoration: none; text-align: center; font-size: 16px; '
+            f'margin: 4px 2px; cursor: pointer; padding: 8px 12px; border-radius: 4px; '
+            f'display: flex; align-items: center;">'
+            f'<img src="https://lh3.googleusercontent.com/COxitqgJr1sJnIDe8-jiKhxDx1FrYbtRHKJ9z_hELisAlapwE9LUPh6fcXIfb5vwpbMl4xl9H9TRFPc5NOO8Sb3VSgIBrfRYvW6cUA" '
+            f'alt="Google logo" style="margin-right: 8px; width: 26px; height: 26px; '
+            f'background-color: white; border: 2px solid white; border-radius: 4px;">'
+            f'Sign in with Google</a></div>',
+            unsafe_allow_html=True
+        )
+
         st.markdown("---")
         st.markdown(
             "<div style='text-align: center; color: #9CA3AF; margin-top: 2rem;'>"
