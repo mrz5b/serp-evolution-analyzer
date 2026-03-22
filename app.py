@@ -1110,7 +1110,9 @@ def check_auth():
     if not email.endswith(f'@{ALLOWED_DOMAIN}'):
         st.error(f"⛔ Access denied. This tool is restricted to @{ALLOWED_DOMAIN} accounts.")
         st.caption(f"Signed in as: {email}")
-        auth.logout()
+        st.session_state['connected'] = False
+        st.session_state['user_info'] = {}
+        st.session_state['oauth_id'] = None
         st.stop()
 
     # Clean up temp file
@@ -1167,21 +1169,10 @@ def main():
             st.markdown(f"👤 **{user_info.get('name', '')}**")
             st.caption(user_info.get('email', ''))
             if st.button("Sign out", use_container_width=True):
-                from streamlit_google_auth import Authenticate
-                creds_path = _write_google_credentials()
-                if creds_path:
-                    auth = Authenticate(
-                        secret_credentials_path=creds_path,
-                        redirect_uri=_get_redirect_uri(),
-                        cookie_name="serp_evolution_auth",
-                        cookie_key=_get_cookie_key(),
-                    )
-                    auth.logout()
-                    try:
-                        os.unlink(creds_path)
-                    except Exception:
-                        pass
-                    st.rerun()
+                st.session_state['connected'] = False
+                st.session_state['user_info'] = {}
+                st.session_state['oauth_id'] = None
+                st.rerun()
 
         st.markdown("---")
 
