@@ -386,18 +386,28 @@ Top persistent URLs (pre→post days):
 
 Dropped URLs: {', '.join(dropped) if dropped else 'None significant'}
 
-Slot-day shifts by source category:
+Source category shifts (search positions held per period):
 {cat_shifts}
 
-Format each point as exactly two lines — no other text, no numbering, no markdown, no prefixes:
-[Short punchy headline, max 10 words]
-[One sentence of supporting detail with key numbers]
+POINT STRUCTURE (follow this sequence):
+- Point 1: The single most significant shift in search composition.
+- Point 2: The secondary movement — what was displaced, what emerged, or the other side of point 1.
+- Point 3: How the client's owned/corporate content performed through the event — IF this is noteworthy. If owned content was unremarkable, surface the next most important finding instead.
+- Point 4: A strategic or forward-looking read on what the pattern means — IF the data supports one. If not, surface another distinct data finding.
+Each point must cover a different aspect of the data. Do not restate the same dynamic from multiple angles.
 
-Keep headlines SHORT — e.g. "News coverage surged 168% post-announcement". Not full sentences.
-Keep detail to ONE sentence with 1-2 key data points.
-Do NOT include the words "HEADLINE" or "DETAIL" anywhere.
-Do NOT use markdown bold (**), bullets, or numbering.
-Focus on what matters for reputation management. Do not recommend Knowledge Panel claiming/verification."""
+FORMAT (strict):
+Each point is exactly two lines — no other text, no numbering, no markdown, no prefixes:
+[Short headline, max 10 words]
+[One sentence with 1-2 key data points]
+
+WRITING RULES:
+- Always express numbers with denominators: "34 of {n_post} days" not "34 days". "25 of {total} URLs" not "25 URLs".
+- Never say "slot-days" — instead say "search positions" or "of available search results".
+- One stat per sentence. Name the subject before the number: "Financial Post appeared 34 of {n_post} days" — never "Financial Post and Bloomberg appeared 34 and 29 days respectively".
+- Do NOT include the words "HEADLINE" or "DETAIL" anywhere.
+- Do NOT use markdown bold (**), bullets, or numbering.
+- Do not recommend Knowledge Panel claiming/verification."""
         }]
     )
 
