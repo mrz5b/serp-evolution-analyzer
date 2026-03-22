@@ -260,7 +260,7 @@ def _classify_with_claude(url_data, unmapped_urls, api_key):
     url_list = "\n".join(unmapped_urls)
     categories = ", ".join(VALID_CATEGORIES)
     msg = client.messages.create(
-        model="claude-opus-4-20250514",
+        model="claude-sonnet-4-20250514",
         max_tokens=2000,
         temperature=0.0,
         messages=[{
@@ -367,7 +367,7 @@ def generate_executive_summary(url_data, cat_summary, client_name, event_desc, n
     import anthropic
     client = anthropic.Anthropic(api_key=api_key)
     msg = client.messages.create(
-        model="claude-opus-4-20250514",
+        model="claude-sonnet-4-20250514",
         max_tokens=1000,
         temperature=0.3,
         messages=[{
