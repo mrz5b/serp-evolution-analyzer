@@ -931,6 +931,7 @@ def _add_textbox(slide, left, top, width, height, text, font_name='Calibri',
     txBox.text_frame.margin_right = Emu(0)
     txBox.text_frame.margin_top = Emu(0)
     txBox.text_frame.margin_bottom = Emu(0)
+    txBox.text_frame.vertical_anchor = anchor
     return txBox
 
 
@@ -1151,11 +1152,11 @@ def build_slide_4_v2(prs, url_data, n_pre, n_post, logo_path, slide_copy=None):
 
         # Pre value (left of bar)
         _add_textbox(slide, pre_left - Inches(0.35), y, Inches(0.32), row_h,
-                     str(d['pre_days']), 'Calibri', 8, GRAY, alignment=PP_ALIGN.RIGHT)
+                     str(d['pre_days']), 'Calibri', 8, GRAY, alignment=PP_ALIGN.RIGHT, anchor=MSO_ANCHOR.MIDDLE)
 
         # Center label (hyperlinked to URL)
         txb = _add_textbox(slide, label_center - label_w / 2, y, label_w, row_h,
-                           label, 'Calibri', 8, GRAY, alignment=PP_ALIGN.CENTER)
+                           label, 'Calibri', 8, GRAY, alignment=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.MIDDLE)
         try:
             _add_hyperlink(txb.text_frame.paragraphs[0].runs[0], d['url'])
         except Exception:
@@ -1167,7 +1168,7 @@ def build_slide_4_v2(prs, url_data, n_pre, n_post, logo_path, slide_copy=None):
 
         # Post value (right of bar)
         _add_textbox(slide, post_bar_left + post_w + Emu(20000), y, Inches(0.35), row_h,
-                     str(d['post_days']), 'Calibri', 8, GRAY)
+                     str(d['post_days']), 'Calibri', 8, GRAY, anchor=MSO_ANCHOR.MIDDLE)
 
     _add_logo(slide, logo_path)
 
@@ -1218,7 +1219,7 @@ def build_slide_5(prs, url_data, n_post, logo_path, slide_copy=None):
 
         # Label (right-aligned, hyperlinked to URL)
         txb = _add_textbox(slide, Inches(0.3), y, label_right - Inches(0.4), row_h,
-                     label, 'Calibri', 10, GRAY, alignment=PP_ALIGN.RIGHT)
+                     label, 'Calibri', 10, GRAY, alignment=PP_ALIGN.RIGHT, anchor=MSO_ANCHOR.MIDDLE)
         try:
             _add_hyperlink(txb.text_frame.paragraphs[0].runs[0], d['url'])
         except Exception:
@@ -1230,7 +1231,7 @@ def build_slide_5(prs, url_data, n_post, logo_path, slide_copy=None):
 
         # Value
         _add_textbox(slide, bar_left + bar_w + Emu(30000), y, Inches(0.4), row_h,
-                     str(d['post_days']), 'Calibri', 9, GRAY)
+                     str(d['post_days']), 'Calibri', 9, GRAY, anchor=MSO_ANCHOR.MIDDLE)
 
     # Footnote
     footnote = (slide_copy or {}).get('slide_5_footnote')
