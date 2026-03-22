@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 .streamlit/secrets.toml
 .streamlit/secrets.toml.example
+assets/
 *.xlsx
 *.pptx
 .env

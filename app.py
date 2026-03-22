@@ -9,6 +9,8 @@ import re
 import io
 import os
 import math
+import base64
+import tempfile
 from datetime import datetime, date
 from collections import defaultdict
 
@@ -65,6 +67,51 @@ VALID_CATEGORIES = [
     'Forum / UGC', 'Research', 'Financial Data', 'Conference / Event',
     'Regulatory', 'Other'
 ]
+
+# ─────────────────────────────────────────────
+# LOGO LOADING
+# ─────────────────────────────────────────────
+
+@st.cache_resource
+def _get_logo_paths():
+    """
+    Load logos from Streamlit secrets (base64-encoded) or fall back to local assets/ folder.
+    Returns (logo_path, logo_white_path) as temp file paths.
+    """
+    logo_path = None
+    logo_white_path = None
+
+    # Try secrets first
+    try:
+        logo_b64 = st.secrets.get("LOGO_PNG", None)
+        logo_white_b64 = st.secrets.get("LOGO_WHITE_PNG", None)
+
+        if logo_b64:
+            tmp = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
+            tmp.write(base64.b64decode(logo_b64))
+            tmp.close()
+            logo_path = tmp.name
+
+        if logo_white_b64:
+            tmp = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
+            tmp.write(base64.b64decode(logo_white_b64))
+            tmp.close()
+            logo_white_path = tmp.name
+    except Exception:
+        pass
+
+    # Fall back to local assets/ folder (for local dev)
+    if not logo_path:
+        local = os.path.join(os.path.dirname(__file__), 'assets', 'logo.png')
+        if os.path.exists(local):
+            logo_path = local
+
+    if not logo_white_path:
+        local = os.path.join(os.path.dirname(__file__), 'assets', 'logo_white.png')
+        if os.path.exists(local):
+            logo_white_path = local
+
+    return logo_path, logo_white_path
 
 # ─────────────────────────────────────────────
 # STEP 1: DATA PROCESSING
@@ -1092,9 +1139,10 @@ def main():
 
     # Sidebar
     with st.sidebar:
-        try:
-            st.image(os.path.join(os.path.dirname(__file__), 'assets', 'logo.png'), width=180)
-        except Exception:
+        logo_path, logo_white_path = _get_logo_paths()
+        if logo_path:
+            st.image(logo_path, width=180)
+        else:
             st.markdown("**Five Blocks**")
 
         # Show logged-in user + logout
@@ -1270,9 +1318,7 @@ def main():
             f"{_format_date(first_date, '%b %-d, %Y')} – {_format_date(last_date, '%b %-d, %Y')}  ({n_pre} days each side)"
         )
 
-        base_dir = os.path.dirname(__file__)
-        logo_path = os.path.join(base_dir, 'assets', 'logo.png')
-        logo_white_path = os.path.join(base_dir, 'assets', 'logo_white.png')
+        logo_path, logo_white_path = _get_logo_paths()
 
         with st.spinner("Building PowerPoint deck..."):
             pptx_bytes = generate_pptx(
