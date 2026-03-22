@@ -398,7 +398,29 @@ Be concise, data-driven, and insightful. Focus on what matters for reputation ma
     )
 
     text = msg.content[0].text
+    points = _parse_summary_points(text)
+
+    # If Claude's response couldn't be parsed, fall back to data-driven templates
+    if len(points) < 2:
+        return generate_fallback_summary(url_data, cat_summary, client_name, event_desc, n_pre, n_post)
+
+    # Pad with fallback points if we got some but fewer than 4
+    if len(points) < 4:
+        fallback = generate_fallback_summary(url_data, cat_summary, client_name, event_desc, n_pre, n_post)
+        for fb in fallback:
+            if len(points) >= 4:
+                break
+            if fb[0] not in [p[0] for p in points]:
+                points.append(fb)
+
+    return points[:4]
+
+
+def _parse_summary_points(text):
+    """Parse executive summary points from Claude's response, handling varied formats."""
     points = []
+
+    # Strategy 1: Explicit HEADLINE: / DETAIL: format
     current_headline = None
     current_detail = None
     for line in text.strip().split('\n'):
@@ -415,12 +437,72 @@ Be concise, data-driven, and insightful. Focus on what matters for reputation ma
     if current_headline:
         points.append((current_headline, current_detail or ''))
 
-    if len(points) < 4:
-        # Fallback: generate simple points from data
-        while len(points) < 4:
-            points.append(("Data-driven shift detected.", "See the detailed charts for full analysis."))
+    if len(points) >= 2:
+        return points
 
-    return points[:4]
+    # Strategy 2: Numbered points with bold headline — e.g. "1. **Headline here**\nDetail text"
+    # Also handles "1. Headline here\nDetail text" without bold
+    points = []
+    lines = text.strip().split('\n')
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        # Match numbered line: "1.", "1)", "- ", "• "
+        m = re.match(r'^(?:\d+[\.\)]\s*|[-•]\s*)(.*)', line)
+        if m:
+            headline = m.group(1).strip()
+            # Strip markdown bold
+            headline = re.sub(r'\*\*(.+?)\*\*', r'\1', headline)
+            headline = headline.strip('*').strip()
+            # Collect subsequent non-numbered lines as detail
+            detail_lines = []
+            i += 1
+            while i < len(lines):
+                next_line = lines[i].strip()
+                if not next_line:
+                    i += 1
+                    continue
+                if re.match(r'^(?:\d+[\.\)]\s*|[-•]\s*)', next_line):
+                    break
+                detail_lines.append(next_line)
+                i += 1
+            detail = ' '.join(detail_lines)
+            detail = re.sub(r'\*\*(.+?)\*\*', r'\1', detail).strip()
+            if headline:
+                points.append((headline, detail))
+        else:
+            i += 1
+
+    if len(points) >= 2:
+        return points
+
+    # Strategy 3: Bold lines as headlines, following lines as detail
+    points = []
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        bold_match = re.match(r'^\*\*(.+?)\*\*[:\s]*(.*)', line)
+        if bold_match:
+            headline = bold_match.group(1).strip()
+            rest = bold_match.group(2).strip()
+            detail_lines = [rest] if rest else []
+            i += 1
+            while i < len(lines):
+                next_line = lines[i].strip()
+                if not next_line:
+                    i += 1
+                    continue
+                if re.match(r'^\*\*', next_line):
+                    break
+                detail_lines.append(next_line)
+                i += 1
+            detail = ' '.join(detail_lines).strip()
+            if headline:
+                points.append((headline, detail))
+        else:
+            i += 1
+
+    return points
 
 
 def generate_fallback_summary(url_data, cat_summary, client_name, event_desc, n_pre, n_post):
