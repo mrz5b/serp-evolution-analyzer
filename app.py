@@ -1093,18 +1093,7 @@ def check_auth():
         }
         authorization_url = f"https://accounts.google.com/o/oauth2/auth?{urlencode(params)}"
 
-        st.markdown(
-            f'<div style="display: flex; justify-content: center;">'
-            f'<a href="{authorization_url}" target="_top" rel="noreferrer" style="background-color: #4285f4; '
-            f'color: #fff; text-decoration: none; text-align: center; font-size: 16px; '
-            f'margin: 4px 2px; cursor: pointer; padding: 8px 12px; border-radius: 4px; '
-            f'display: flex; align-items: center;">'
-            f'<img src="https://lh3.googleusercontent.com/COxitqgJr1sJnIDe8-jiKhxDx1FrYbtRHKJ9z_hELisAlapwE9LUPh6fcXIfb5vwpbMl4xl9H9TRFPc5NOO8Sb3VSgIBrfRYvW6cUA" '
-            f'alt="Google logo" style="margin-right: 8px; width: 26px; height: 26px; '
-            f'background-color: white; border: 2px solid white; border-radius: 4px;">'
-            f'Sign in with Google</a></div>',
-            unsafe_allow_html=True
-        )
+        st.link_button("🔐 Sign in with Google", authorization_url, use_container_width=True)
 
         st.markdown("---")
         st.markdown(
